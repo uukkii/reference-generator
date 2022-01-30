@@ -2,12 +2,14 @@ package Server;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class Link {
 
     private final String original;
     private final String link;
-    private final int rank;
-    private final int count;
+    private int rank;
+    private final AtomicInteger count = new AtomicInteger();
 
     public Link(
             @JsonProperty("original") String original,
@@ -18,7 +20,7 @@ public class Link {
        this.original = original;
        this.link = link;
        this.rank = rank;
-       this.count = count;
+       this.count.set(count);
     }
 
     public String getOriginal() {
@@ -34,16 +36,24 @@ public class Link {
     }
 
     public int getCount() {
-        return count;
+        return count.get();
+    }
+
+    public void setCount(int count) {
+       this.count.addAndGet(count);
+    }
+
+    public void setRank(int rank) {
+        this.rank = rank;
     }
 
     @Override
     public String toString() {
         return "{" +
-                "\n\"original\": " + original +
-                "\n\"link\": " + link +
-                "\n\"rank\": " + rank +
-                "\n\"count\": " + count +
+                "\n\"original\": " + "\"" + original + "\"" +
+                "\n\"link\": " + "\"" + link + "\"" +
+                "\n\"rank\": " + "\"" + rank + "\"" +
+                "\n\"count\": " + "\"" + count + "\"" +
                 "\n}";
     }
 }
