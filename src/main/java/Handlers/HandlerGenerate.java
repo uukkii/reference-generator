@@ -1,23 +1,37 @@
 package Handlers;
 
-import Server.*;
-
+import Server.Link;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
 public class HandlerGenerate implements HttpHandler {
 
+    protected static final Map<String, Link> mapOfLinks = new HashMap<>();
     private static final int LENGTH_OF_LINK = 10;
     private static final int DEFAULT_RANK = 0;
     private static final int DEFAULT_COUNT = 0;
     private static final String SET_OF_CHARACTERS = "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
-    private static final Map<String, Link> mapOfLinks = new HashMap<>();
+    private static final String OBJECT_NOT_FOUND = "Object not found!";
+    private static StringBuilder shortLink;
+
+    public static void sendResponse(HttpExchange httpExchange, int rCode, String requestParamValue) throws IOException {
+        httpExchange.sendResponseHeaders(rCode, requestParamValue.length());
+        httpExchange.getResponseBody().write(requestParamValue.getBytes());
+        httpExchange.getResponseBody().flush();
+        httpExchange.getResponseBody().close();
+    }
+
+    public static void monitoring(HttpExchange httpExchange) {
+        System.out.println(httpExchange.getRequestHeaders());
+        System.out.println(httpExchange.getRequestMethod());
+        System.out.println(httpExchange.getRequestURI());
+        System.out.println(httpExchange.getRequestBody());
+    }
 
     @Override
     public void handle(HttpExchange httpExchange) throws IOException {
@@ -25,33 +39,31 @@ public class HandlerGenerate implements HttpHandler {
 
         if (httpExchange.getRequestMethod().equals("GET")) {
             requestParamValue = handleGetRequest(httpExchange);
-        } else if (httpExchange.equals("POST")) {
+        } else if (httpExchange.getRequestMethod().equals("POST")) {
             requestParamValue = handlePostRequest(httpExchange);
         }
         handleResponse(httpExchange, requestParamValue);
     }
 
     private String handleGetRequest(HttpExchange httpExchange) {
-        System.out.println("1 - " + httpExchange.getRequestHeaders().entrySet());
-        System.out.println("2 - " + httpExchange.getRequestMethod());
-        System.out.println("3 - " + httpExchange.getRequestURI());
-        System.out.println("4 - " + httpExchange.getRequestBody());
-        return httpExchange.getRequestURI()
-                .toString()
-                .split("\\?")[1]
-                .split("=")[1];
+        // Monitoring
+        monitoring(httpExchange);
+
+        // Object check
+        String[] keyAndValue = getKeyAndValueOfRequest(httpExchange);
+        for (Map.Entry<String, Link> entry : mapOfLinks.entrySet()) {
+            if (keyAndValue[1].equals(entry.getValue().getOriginal()))
+                return entry.getValue().getLink();
+        }
+        return null;
     }
 
-    private String handlePostRequest(HttpExchange httpExchange) throws IOException {
+    private String handlePostRequest(HttpExchange httpExchange) {
         // Monitoring
-        System.out.println(httpExchange.getRequestHeaders());
-        System.out.println(httpExchange.getRequestMethod());
-        System.out.println(httpExchange.getRequestURI());
-        System.out.println(httpExchange.getRequestBody());
+        monitoring(httpExchange);
 
-        String originalLink = httpExchange.getRequestURI().toString();
-        String request = originalLink.substring(originalLink.indexOf("?"));
-        String[] keyAndValue = request.split("=");
+        // Creating object
+        String[] keyAndValue = getKeyAndValueOfRequest(httpExchange);
         Link newLink = new Link(
                 keyAndValue[1],
                 generateLinkName(),
@@ -60,31 +72,34 @@ public class HandlerGenerate implements HttpHandler {
         );
         mapOfLinks.put(keyAndValue[0], newLink);
 
-        return newLink.getOriginal();
+        // Return requestParamValue
+        return newLink.getLink();
     }
 
     private void handleResponse(HttpExchange httpExchange, String requestParamValue) throws IOException {
-        while (!mapOfLinks.isEmpty()) {
-            for (Map.Entry<String, Link> entry : mapOfLinks.entrySet()) {
-                String response = "For link " + requestParamValue + " crated short link: "
-                        + "{\n" +
-                        "link" + entry.getValue().getLink() +
-                        "\n}";
-                httpExchange.sendResponseHeaders(200, response.length());
-                httpExchange.getResponseBody().write(response.getBytes());
-            }
-            httpExchange.getResponseBody().flush();
-            httpExchange.getResponseBody().close();
-        }
+        if (requestParamValue != null) {
+            String response = "{\n" +
+                    "\"link\" " + "\"" + requestParamValue + "\"" +
+                    "\n}";
+            sendResponse(httpExchange, 200, response);
+        } else requestParamValue = OBJECT_NOT_FOUND;
+        sendResponse(httpExchange, 404, requestParamValue);
     }
 
-    public String generateLinkName() {
-        StringBuilder shortLink = new StringBuilder();
+    // Other methods
+    private String generateLinkName() {
+        shortLink = new StringBuilder();
         for (int i = 0; i < LENGTH_OF_LINK; i++) {
             int randInt = new Random().nextInt(SET_OF_CHARACTERS.length());
             char randChar = SET_OF_CHARACTERS.charAt(randInt);
             shortLink.append(randChar);
         }
-        return "/1/" + shortLink.toString();
+        return "/1/" + shortLink;
+    }
+
+    private String[] getKeyAndValueOfRequest(HttpExchange httpExchange) {
+        String originalLink = httpExchange.getRequestURI().toString();
+        String request = originalLink.substring(originalLink.indexOf("?"));
+        return request.split("=");
     }
 }
